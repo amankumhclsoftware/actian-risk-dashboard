@@ -1356,7 +1356,7 @@ input[type=file]{display:none}
     <!-- Upload bar -->
     <div class="upload-bar">
       <span class="ub-label">&#9889; Live Google Sheet</span>
-      <span class="ub-hint" id="gsConnectHint">Connecting to Actian Risk Assessment · auto-refreshes every 2 minutes</span>
+      <span class="ub-hint" id="gsConnectHint">Live via Google Apps Script · auto-refreshes every 2 minutes</span>
       <button class="ub-btn" id="gsRefreshBtn" onclick="fetchGoogleSheet(true)">&#8635; Refresh now</button>
       <button class="ub-btn secondary" onclick="exportToPDF()" title="Export PDF">&#128438; Export PDF</button>
       <label class="ub-btn secondary" for="xlsxInput" title="Manual upload fallback">&#8679; Upload Excel</label>
@@ -2726,34 +2726,20 @@ async function fetchGoogleSheet(manual){
     const btn=document.getElementById('gsRefreshBtn');
     if(btn){ btn.textContent='⟳ Refreshing…'; btn.disabled=true; }
   }
-  gsSetStatus(null, 'Fetching from Google Sheet…');
+  gsSetStatus(null, 'Connecting to Google Sheet…');
 
   try{
-    gsSetStatus(null, 'Connecting to Google Sheet…');
-    // Try JSONP first (bypasses CORS), fall back to direct CSV fetch
-    let psRows, rrRows, scRows;
-    try{
-      [psRows, rrRows, scRows] = await Promise.all([
-        fetchSheetJSONP('1RFLY7x9fPlr9Ov0cEZvstZDS8TR4zolL', '535317641'),
-        fetchSheetJSONP('1RFLY7x9fPlr9Ov0cEZvstZDS8TR4zolL', '606973817'),
-        fetchSheetJSONP('1RFLY7x9fPlr9Ov0cEZvstZDS8TR4zolL', '1794506168')
-      ]);
-      // JSONP returns [headers, ...rows] — skip header row (index 0), data from index 1
-      psRows = psRows.slice(1); rrRows = rrRows.slice(1); scRows = scRows.slice(1);
-      // Re-add 4 blank rows at start so existing index logic (i=4) still works
-      const pad = [[],[],[],[]];
-      psRows = [...pad, ...psRows];
-      rrRows = [...pad, ...rrRows];
-      scRows = [...pad, ...scRows];
-    } catch(jsonpErr){
-      console.warn('JSONP failed, trying CSV fetch:', jsonpErr.message);
-      gsSetStatus(null, 'Retrying with direct fetch…');
-      [psRows, rrRows, scRows] = await Promise.all([
-        fetchSheet(GS_URL_PS),
-        fetchSheet(GS_URL_RR),
-        fetchSheet(GS_URL_SC)
-      ]);
-    }
+    // Fetch via Google Apps Script web app — authenticated within HCL Google
+    const resp = await fetch('https://script.google.com/a/macros/hcl-software.com/s/AKfycbx-cJ7RWpQbmDcA97IexbAfDPemMi3iCppDTSFLCnrZAnAJ4taiTT8O9IJ5nz9gBhCfpg/exec', {redirect:'follow'});
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    const json = await resp.json();
+
+    // Apps Script returns {portfolioSummary:[], riskRegister:[], riskScorecard:[]}
+    // Pad with 4 empty rows so existing index logic (i=4) still works
+    const pad = [[],[],[],[]];
+    const psRows = [...pad, ...json.portfolioSummary];
+    const rrRows = [...pad, ...json.riskRegister];
+    const scRows = [...pad, ...json.riskScorecard];
 
     // ── Parse Portfolio Summary (rows 5-17, index 4-16) ──
     const VALID_RISKS = ["CRITICAL","HIGH","MEDIUM","LOW"];
@@ -2879,16 +2865,15 @@ async function fetchGoogleSheet(manual){
       'Sheet ID: 1RFLY7x9fPlr9Ov0cEZvstZDS8TR4zolL\n' +
       'Attempted: JSONP + CSV fetch\n' +
       'Time: ' + new Date().toLocaleString() + '\n\n' +
-      'Root cause: The HTML file is opened as a local file (file://) which browsers\n' +
-      'block from making cross-origin requests to Google Sheets.\n\n' +
+      'Root cause: The Apps Script web app returned an error.\n\n' +
       'Solutions (try in order):\n' +
       '1. Use the manual Upload Excel button as a reliable fallback\n' +
       '2. Serve this file via a local server — open Terminal and run:\n' +
       '   cd /path/to/this/file && python3 -m http.server 8080\n' +
       '   Then open: http://localhost:8080/actian_risk_intelligence.html\n' +
       '3. Host the file on any web server (SharePoint, Google Sites, etc.)\n\n' +
-      'Note: You are signed in and the sheet is accessible — the issue is the\n' +
-      'file:// protocol restriction, not your Google account.'
+      'Note: Make sure the Apps Script deployment is set to\n' +
+      '"Anyone within HCL Software" and you are signed into your HCL Google account.'
     );
   } finally {
     const btn=document.getElementById('gsRefreshBtn');
