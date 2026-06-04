@@ -2777,7 +2777,7 @@ async function fetchGoogleSheet(manual){
       };
       const script = document.createElement('script');
       script.id = 'as_script';
-      script.src = 'https://script.google.com/a/macros/hcl-software.com/s/AKfycbxylt_54P3Bcp7k2DDmCYXplC628sgxny641IoIcB_hmIBWb8IHcJGAZkNtHvuoC40qTw/exec?callback=' + cbName;
+      script.src = 'https://script.google.com/a/macros/hcl-software.com/s/AKfycbw-4lJoMC78YWIZ4OiFXjDiUXGIyxPcjVGRw38wORf2gAnGdeBEgNDHG-xyPEDqYq5vaQ/exec?callback=' + cbName;
       script.onerror = () => {
         clearTimeout(timeout);
         delete window[cbName];
