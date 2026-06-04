@@ -2759,32 +2759,14 @@ async function fetchGoogleSheet(manual){
   gsSetStatus(null, 'Connecting to Google Sheet…');
 
   try{
-    // Fetch via Google Apps Script using JSONP to bypass CORS
-    const json = await new Promise((resolve, reject) => {
-      const cbName = 'appsScriptCb_' + Date.now();
-      const timeout = setTimeout(() => {
-        delete window[cbName];
-        const s = document.getElementById('as_script');
-        if(s) s.remove();
-        reject(new Error('Apps Script timeout — check deployment settings'));
-      }, 15000);
-      window[cbName] = function(data) {
-        clearTimeout(timeout);
-        delete window[cbName];
-        const s = document.getElementById('as_script');
-        if(s) s.remove();
-        resolve(data);
-      };
-      const script = document.createElement('script');
-      script.id = 'as_script';
-      script.src = 'https://script.google.com/a/macros/hcl-software.com/s/AKfycbyHTRrOV9ONy1RzwY3G78VCNU3wQL3QDGmG0FBsLBBE6ngloIcHVmmZHDJ4iH4yg61R5g/exec?callback=' + cbName;
-      script.onerror = () => {
-        clearTimeout(timeout);
-        delete window[cbName];
-        reject(new Error('Apps Script load failed — ensure deployment is set to Anyone within HCL Software'));
-      };
-      document.head.appendChild(script);
+    // Fetch via Google Apps Script — direct fetch with credentials
+    const resp = await fetch('https://script.google.com/a/macros/hcl-software.com/s/AKfycbyHTRrOV9ONy1RzwY3G78VCNU3wQL3QDGmG0FBsLBBE6ngloIcHVmmZHDJ4iH4yg61R5g/exec', {
+      method: 'GET',
+      credentials: 'include',
+      redirect: 'follow'
     });
+    if(!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
+    const json = await resp.json();
 
     // Apps Script returns {portfolioSummary:[], riskRegister:[], riskScorecard:[]}
     const pad = [[],[],[],[]];
