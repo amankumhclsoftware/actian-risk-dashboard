@@ -2729,17 +2729,38 @@ async function fetchGoogleSheet(manual){
   gsSetStatus(null, 'Connecting to Google Sheet…');
 
   try{
-    // Fetch via Google Apps Script web app — authenticated within HCL Google
-    const resp = await fetch('https://script.google.com/a/macros/hcl-software.com/s/AKfycbx-cJ7RWpQbmDcA97IexbAfDPemMi3iCppDTSFLCnrZAnAJ4taiTT8O9IJ5nz9gBhCfpg/exec', {redirect:'follow'});
-    if(!resp.ok) throw new Error('HTTP ' + resp.status);
-    const json = await resp.json();
+    // Fetch via Google Apps Script using JSONP to bypass CORS
+    const json = await new Promise((resolve, reject) => {
+      const cbName = 'appsScriptCb_' + Date.now();
+      const timeout = setTimeout(() => {
+        delete window[cbName];
+        const s = document.getElementById('as_script');
+        if(s) s.remove();
+        reject(new Error('Apps Script timeout — check deployment settings'));
+      }, 15000);
+      window[cbName] = function(data) {
+        clearTimeout(timeout);
+        delete window[cbName];
+        const s = document.getElementById('as_script');
+        if(s) s.remove();
+        resolve(data);
+      };
+      const script = document.createElement('script');
+      script.id = 'as_script';
+      script.src = 'https://script.google.com/a/macros/hcl-software.com/s/AKfycbxylt_54P3Bcp7k2DDmCYXplC628sgxny641IoIcB_hmIBWb8IHcJGAZkNtHvuoC40qTw/exec?callback=' + cbName;
+      script.onerror = () => {
+        clearTimeout(timeout);
+        delete window[cbName];
+        reject(new Error('Apps Script load failed — ensure deployment is set to Anyone within HCL Software'));
+      };
+      document.head.appendChild(script);
+    });
 
     // Apps Script returns {portfolioSummary:[], riskRegister:[], riskScorecard:[]}
-    // Pad with 4 empty rows so existing index logic (i=4) still works
     const pad = [[],[],[],[]];
-    const psRows = [...pad, ...json.portfolioSummary];
-    const rrRows = [...pad, ...json.riskRegister];
-    const scRows = [...pad, ...json.riskScorecard];
+    const psRows = [...pad, ...(json.portfolioSummary||[])];
+    const rrRows = [...pad, ...(json.riskRegister||[])];
+    const scRows = [...pad, ...(json.riskScorecard||[])];
 
     // ── Parse Portfolio Summary (rows 5-17, index 4-16) ──
     const VALID_RISKS = ["CRITICAL","HIGH","MEDIUM","LOW"];
