@@ -2139,21 +2139,37 @@ function updateActionKpi(){
 
 // ── Filter & Search ──
 function namesMatch(a,b){
-  a=a.toLowerCase().trim().replace(/\s+/g,' ');
-  b=b.toLowerCase().trim().replace(/\s+/g,' ');
-  if(a===b) return true;
-  // Remove punctuation and compare
-  const clean = s => s.replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
-  if(clean(a)===clean(b)) return true;
-  // Slice match — first 12 chars
-  if(a.length>=8 && b.includes(a.slice(0,12))) return true;
-  if(b.length>=8 && a.includes(b.slice(0,12))) return true;
-  // Word match — all significant words of shorter name appear in longer
-  const words = s => s.split(' ').filter(w=>w.length>2);
+  // Normalise: lowercase, trim, collapse spaces, remove punctuation
+  const norm = s => s.toLowerCase().trim()
+    .replace(/[^a-z0-9 ]/g,' ')
+    .replace(/\s+/g,' ').trim();
+  // Remove common prefixes that vary between sources
+  const strip = s => norm(s)
+    .replace(/^actian /,'')
+    .replace(/^hcl /,'')
+    .replace(/^ibm /,'');
+
+  const na=norm(a), nb=norm(b);
+  const sa=strip(a), sb=strip(b);
+
+  // Exact match
+  if(na===nb) return true;
+  // Stripped match (removes Actian/HCL/IBM prefix)
+  if(sa===sb) return true;
+  // One contains the other (stripped)
+  if(sa.length>3 && sb.includes(sa)) return true;
+  if(sb.length>3 && sa.includes(sb)) return true;
+  // First significant word matches + at least one more word
+  const words = s => strip(s).split(' ').filter(w=>w.length>2);
   const wa=words(a), wb=words(b);
-  const shorter = wa.length<=wb.length ? wa : wb;
-  const longer  = wa.length<=wb.length ? wb : wa;
-  if(shorter.length>0 && shorter.every(w=>longer.some(lw=>lw.includes(w)||w.includes(lw)))) return true;
+  if(wa.length>0 && wb.length>0){
+    // All words of shorter exist in longer (stripped)
+    const shorter=wa.length<=wb.length?wa:wb;
+    const longer=wa.length<=wb.length?wb:wa;
+    if(shorter.every(w=>longer.some(lw=>lw.includes(w)||w.includes(lw)))) return true;
+    // First word matches exactly
+    if(wa[0]===wb[0]) return true;
+  }
   return false;
 }
 
