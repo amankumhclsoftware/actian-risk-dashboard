@@ -2139,8 +2139,22 @@ function updateActionKpi(){
 
 // ── Filter & Search ──
 function namesMatch(a,b){
-  a=a.toLowerCase(); b=b.toLowerCase();
-  return a.includes(b.slice(0,10))||b.includes(a.slice(0,10))||a===b;
+  a=a.toLowerCase().trim().replace(/\s+/g,' ');
+  b=b.toLowerCase().trim().replace(/\s+/g,' ');
+  if(a===b) return true;
+  // Remove punctuation and compare
+  const clean = s => s.replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
+  if(clean(a)===clean(b)) return true;
+  // Slice match — first 12 chars
+  if(a.length>=8 && b.includes(a.slice(0,12))) return true;
+  if(b.length>=8 && a.includes(b.slice(0,12))) return true;
+  // Word match — all significant words of shorter name appear in longer
+  const words = s => s.split(' ').filter(w=>w.length>2);
+  const wa=words(a), wb=words(b);
+  const shorter = wa.length<=wb.length ? wa : wb;
+  const longer  = wa.length<=wb.length ? wb : wa;
+  if(shorter.length>0 && shorter.every(w=>longer.some(lw=>lw.includes(w)||w.includes(lw)))) return true;
+  return false;
 }
 
 function setFilter(filter){
@@ -2840,10 +2854,21 @@ async function fetchGoogleSheet(manual){
       }
     });
 
-    // ── Build summary rows ──
-    const summaryRows=Object.entries(updated).map(([name,u])=>{
-      const sc=scMap[Object.keys(scMap).find(k=>namesMatch(k,name))||''];
-      return {name,risk:u.risk,score:(sc&&sc.calc)||u.score,trend:u.trend,status:u.rstatus,concern:u.concern,owner:u.owner,lastReviewed:u.lastReviewed};
+    // ── Build summary rows — include ALL 13 products, merge sheet data where matched ──
+    const summaryRows = P.map(p => {
+      const xlKey = Object.keys(updated).find(k=>namesMatch(k,p.name));
+      const u = xlKey ? updated[xlKey] : null;
+      const sc = scMap[Object.keys(scMap).find(k=>namesMatch(k,p.name))||''];
+      return {
+        name: p.name,
+        risk: (u&&u.risk) || p.risk,
+        score: (sc&&sc.calc)||(u&&u.score)||null,
+        trend: (u&&u.trend)||'',
+        status: (u&&u.rstatus)||'',
+        concern: (u&&u.concern)||'',
+        owner: (u&&u.owner)||'',
+        lastReviewed: (u&&u.lastReviewed)||''
+      };
     });
     _allSummaryRows=summaryRows;
 
